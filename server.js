@@ -5,7 +5,9 @@ const app = express()
 const port = process.env.PORT || 3000
 const rootDomain = 'https://d.tube'
 
-const lightrpc = createClient('https://api.steemit.com');
+const lightrpc = createClient('https://api.steemit.com', {
+    timeout: 5000
+});
 
 let layouts = {}
 
@@ -20,6 +22,13 @@ app.get('*', function(req, res, next) {
             req.query.url.split('/')[4],
             req.query.url.split('/')[5],
             function(err, html, pageTitle, description, url, snap, urlvideo, duration) {
+                if (err) {
+                    if (err.message.toString().startsWith('Request has timed out.'))
+                        res.sendStatus(503)
+                    else
+                        res.sendStatus(404)
+                    return;
+                }
                 var response = {
                     type: 'video',
                     version: '1.0',
@@ -81,7 +90,7 @@ function getVideo(author, permlink, cb) {
         //console.log(result.content[author+'/'+permlink])
         var video = parseVideo(result.content[author+'/'+permlink])
         if (!video.content || !video.info) {
-            cb('Weird error')
+            cb(new Error('Weird Error'))
             return;
         }
         var hashVideo = video.content.video480hash ? video.content.video480hash : video.content.videohash
@@ -107,7 +116,8 @@ function getVideo(author, permlink, cb) {
 
 function parseVideo(video, isComment) {
     try {
-      var newVideo = JSON.parse(video.json_metadata).video
+        if (video && video.json_metadata)
+            var newVideo = JSON.parse(video.json_metadata).video
     } catch(e) {
         console.log(e)
     }
