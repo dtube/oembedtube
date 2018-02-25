@@ -1,4 +1,6 @@
 const fs = require('fs')
+const jsonxml = require('jsontoxml');
+const escape = require('escape-html');
 const express = require('express')
 const { createClient } = require('lightrpc');
 const app = express()
@@ -77,8 +79,17 @@ app.get('*', function(req, res, next) {
                     thumbnail_width: 210,
                     thumbnail_height: 118
                 }
-                res.send(response)
-                return
+                if (req.query.format == 'xml') {
+                    res.set('Content-Type', 'text/xml');
+                    response.html = escape(response.html)
+                    var xml = jsonxml(response)
+                    xml += '</oembed>'
+                    xml = '<oembed>' + xml
+                    xml = '<?xml version="1.0" encoding="utf-8"?>\n' + xml
+                    res.send(xml)
+                }
+                else
+                    res.send(response)
             })
         } else {
             res.sendStatus(404);

@@ -14,7 +14,9 @@
   "author": "Adrien M",
   "license": "ISC",
   "dependencies": {
+    "escape-html": "^1.0.3",
     "express": "^4.16.2",
+    "jsontoxml": "^1.0.0",
     "lightrpc": "0.0.5"
   }
 }
