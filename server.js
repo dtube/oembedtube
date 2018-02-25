@@ -29,6 +29,37 @@ app.get('*', function(req, res, next) {
                         res.sendStatus(404)
                     return;
                 }
+
+                var sizes = {
+                    width: 480,
+                    height: 270
+                }
+                if (req.query.maxwidth && req.query.maxheight) {
+                    var userWidth = parseInt(req.query.maxwidth)
+                    var userHeight = parseInt(req.query.maxheight)
+                    if (convert169(userWidth) > userHeight) {
+                        sizes.height = userHeight
+                        sizes.width = convert169(sizes.height, false)
+                    } else if (userWidth < convert169(userHeight, false)) {
+                        sizes.width = userWidth
+                        sizes.height = convert169(userWidth)
+                    }
+                }
+                if (req.query.maxwidth && !req.query.maxheight) {
+                    var userWidth = parseInt(req.query.maxwidth)
+                    sizes.width = userWidth
+                    sizes.height = convert169(userWidth)
+                }
+                if (!req.query.maxwidth && req.query.maxheight) {
+                    var userHeight = parseInt(req.query.maxheight)
+                    sizes.height = userHeight
+                    sizes.width = convert169(sizes.height, false)
+                }
+                if (sizes.width<=200) {
+                    sizes.width = 200
+                    sizes.height = 113
+                }
+
                 var response = {
                     type: 'video',
                     version: '1.0',
@@ -38,8 +69,8 @@ app.get('*', function(req, res, next) {
                     author_name: req.query.url.split('/')[4],
                     author_url: 'https://d.tube/#!/c/'+req.query.url.split('/')[4],
                     html: html,
-                    width: 480,
-                    height: 270,
+                    width: sizes.width,
+                    height: sizes.height,
                     duration: Math.round(duration),
                     description: description,
                     thumbnail_url: snap,
@@ -60,6 +91,13 @@ app.get('*', function(req, res, next) {
 })
 
 app.listen(port, () => console.log('oembed listening on port '+port))
+
+function convert169(width, isWidth = true) {
+    if (isWidth)
+        return Math.round(width*9/16)
+    
+    return Math.round(width*16/9)
+}
 
 function isValidDTubeUrl(url) {
     var args = url.split('/')
