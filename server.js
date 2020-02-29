@@ -131,27 +131,39 @@ function error(err, next) {
     return false
 }
 
+function handleChainData(author, permlink, video, cb) {
+    var html = '<iframe width="480" height="270" src="https://emb.d.tube/#!/'+author+'/'+permlink+'" frameborder="0" allowfullscreen></iframe>'
+    var url = rootDomain+'/#!/v/'+author+'/'+permlink
+    var snap = null
+    if (video.json.ipfs && video.json.ipfs.snaphash)
+        snap = 'https://snap1.d.tube/ipfs/'+video.json.ipfs.snaphash
+    if (video.json.thumbnailUrl)
+        snap = video.json.thumbnailUrl
+    var duration = video.json.duration || null
+    var description = video.json.description.replace(/(?:\r\n|\r|\n)/g, ' ').substr(0, 300)
+    if (cb) {
+        cb(null, html, video.json.title, description, url, snap, duration)
+        cb = null
+    }
+}
+
 function getVideo(author, permlink, cb) {
+    var hasReplied = false
     var steemDone = false
     var avalonDone = false
     javalon.getContent(author, permlink, function(err, video) {
+        if (hasReplied) return
         avalonDone = true
         if (err) {
             if (steemDone && cb)
                 cb(err)
             return
         }
-        var html = '<iframe width="480" height="270" src="https://emb.d.tube/#!/'+author+'/'+permlink+'" frameborder="0" allowfullscreen></iframe>'
-        var url = rootDomain+'/#!/v/'+author+'/'+permlink
-        var snap = 'https://snap1.d.tube/ipfs/'+video.json.ipfs.snaphash
-        var duration = video.json.duration || null
-        var description = video.json.description.replace(/(?:\r\n|\r|\n)/g, ' ').substr(0, 300)
-        if (cb) {
-            cb(null, html, video.json.title, description, url, snap, duration)
-            cb = null
-        }
+        handleChainData(author, permlink, video, cb)
+        hasReplied = true
     })
     lightrpc.send('get_state', [`/dtube/@${author}/${permlink}`], function(err, result) {
+        if (hasReplied) return
         steemDone = true
         if (err) {
             if (avalonDone && cb)
@@ -165,15 +177,8 @@ function getVideo(author, permlink, cb) {
             return
         }
         var video = parseVideo(result.content[author+'/'+permlink])
-        var html = '<iframe width="480" height="270" src="https://emb.d.tube/#!/'+author+'/'+permlink+'" frameborder="0" allowfullscreen></iframe>'
-        var url = rootDomain+'/#!/v/'+author+'/'+permlink
-        var snap = 'https://snap1.d.tube/ipfs/'+video.json.ipfs.snaphash
-        var duration = video.json.duration || null
-        var description = video.json.description.replace(/(?:\r\n|\r|\n)/g, ' ').substr(0, 300)
-        if (cb) {
-            cb(null, html, video.json.title, description, url, snap, duration)
-            cb = null
-        }
+        handleChainData(author, permlink, video, cb)
+        hasReplied = true
     })
 }
 
