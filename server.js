@@ -10,6 +10,7 @@ const rootDomain = 'https://d.tube'
 const lightrpc = createClient('https://api.steemit.com', {
     timeout: 5000
 });
+const javalon = require('javalon')
 
 let layouts = {}
 
@@ -23,7 +24,7 @@ app.get('*', function(req, res, next) {
             getVideo(
             req.query.url.split('/')[4],
             req.query.url.split('/')[5],
-            function(err, html, pageTitle, description, url, snap, urlvideo, duration) {
+            function(err, html, pageTitle, description, url, snap, duration) {
                 if (err) {
                     if (err.message.toString().startsWith('Request has timed out.'))
                         res.sendStatus(503)
@@ -131,56 +132,70 @@ function error(err, next) {
 }
 
 function getVideo(author, permlink, cb) {
-    lightrpc.send('get_state', [`/dtube/@${author}/${permlink}`], function(err, result) {
+    var steemDone = false
+    var avalonDone = false
+    javalon.getContent(author, permlink, function(err, video) {
+        avalonDone = true
         if (err) {
-            cb(err)
+            if (steemDone && cb)
+                cb(err)
+            return
+        }
+        var html = '<iframe width="480" height="270" src="https://emb.d.tube/#!/'+author+'/'+permlink+'" frameborder="0" allowfullscreen></iframe>'
+        var url = rootDomain+'/#!/v/'+author+'/'+permlink
+        var snap = 'https://snap1.d.tube/ipfs/'+video.json.ipfs.snaphash
+        var duration = video.json.duration || null
+        var description = video.json.description.replace(/(?:\r\n|\r|\n)/g, ' ').substr(0, 300)
+        if (cb) {
+            cb(null, html, video.json.title, description, url, snap, duration)
+            cb = null
+        }
+    })
+    lightrpc.send('get_state', [`/dtube/@${author}/${permlink}`], function(err, result) {
+        steemDone = true
+        if (err) {
+            if (avalonDone && cb)
+                cb(err)
             return
         }
         //console.log(result.content[author+'/'+permlink])
+        if (!result.content[author+'/'+permlink]) {
+            if (avalonDone && cb)
+                cb('Not found')
+            return
+        }
         var video = parseVideo(result.content[author+'/'+permlink])
-        if (!video.content || !video.info) {
-            cb(new Error('Weird Error'))
-            return;
-        }
-        var hashVideo = video.content.video480hash ? video.content.video480hash : video.content.videohash
-        var upvotedBy = []
-        var downvotedBy = []
-        for (let i = 0; i < video.active_votes.length; i++) {
-            if (parseInt(video.active_votes[i].rshares) > 0)
-                upvotedBy.push(video.active_votes[i].voter);    
-            if (parseInt(video.active_votes[i].rshares) < 0)
-                downvotedBy.push(video.active_votes[i].voter);         
-        }
-
         var html = '<iframe width="480" height="270" src="https://emb.d.tube/#!/'+author+'/'+permlink+'" frameborder="0" allowfullscreen></iframe>'
-        
-        var url = rootDomain+'/#!/v/'+video.info.author+'/'+video.info.permlink
-        var snap = 'https://ipfs.io/ipfs/'+video.info.snaphash
-        var urlVideo = 'https://ipfs.io/ipfs/'+hashVideo
-        var duration = video.info.duration || null
-        var description = video.content.description.replace(/(?:\r\n|\r|\n)/g, ' ').substr(0, 300)
-        cb(null, html, video.info.title, description, url, snap, urlVideo, duration)
+        var url = rootDomain+'/#!/v/'+author+'/'+permlink
+        var snap = 'https://snap1.d.tube/ipfs/'+video.json.ipfs.snaphash
+        var duration = video.json.duration || null
+        var description = video.json.description.replace(/(?:\r\n|\r|\n)/g, ' ').substr(0, 300)
+        if (cb) {
+            cb(null, html, video.json.title, description, url, snap, duration)
+            cb = null
+        }
     })
 }
 
 function parseVideo(video, isComment) {
     try {
         if (video && video.json_metadata)
-            var newVideo = JSON.parse(video.json_metadata).video
+            var newVideo = {}
+            newVideo.json = JSON.parse(video.json_metadata).video
     } catch(e) {
         console.log(e)
     }
     if (!newVideo) newVideo = {}
-    newVideo.active_votes = video.active_votes
+    // newVideo.active_votes = video.active_votes
     newVideo.author = video.author
-    newVideo.body = video.body
-    newVideo.total_payout_value = video.total_payout_value
-    newVideo.curator_payout_value = video.curator_payout_value
-    newVideo.pending_payout_value = video.pending_payout_value
+    // newVideo.body = video.body
+    // newVideo.total_payout_value = video.total_payout_value
+    // newVideo.curator_payout_value = video.curator_payout_value
+    // newVideo.pending_payout_value = video.pending_payout_value
     newVideo.permlink = video.permlink
     newVideo.created = video.created
-    newVideo.net_rshares = video.net_rshares
-    newVideo.reblogged_by = video.reblogged_by
+    // newVideo.net_rshares = video.net_rshares
+    // newVideo.reblogged_by = video.reblogged_by
     return newVideo;
 }
 
