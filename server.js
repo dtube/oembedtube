@@ -10,6 +10,9 @@ const rootDomain = 'https://d.tube'
 const lightrpc = createClient('https://api.steemit.com', {
     timeout: 5000
 });
+const lightrpchive = createClient('https://anyx.io', {
+    timeout: 5000
+});
 const javalon = require('javalon')
 
 let layouts = {}
@@ -25,7 +28,6 @@ app.get('*', function(req, res, next) {
             req.query.url.split('/')[4],
             req.query.url.split('/')[5],
             function(err, html, pageTitle, description, url, snap, duration, snapHeight) {
-                console.log(err, html)
                 if (err) {
                     if (err.message.toString().startsWith('Request has timed out.'))
                         res.sendStatus(503)
@@ -145,7 +147,7 @@ function handleChainData(author, permlink, video, cb) {
         snap = 'https://snap1.d.tube/ipfs/'+video.json.ipfs.snaphash
     if (video.json.thumbnailUrl)
         snap = video.json.thumbnailUrl
-    if (video.json.files) {
+    if (!snap && video.json.files) {
         for (const key in video.json.files) {
             if (video.json.files[key].img && video.json.files[key].img["118"])
                 snap = 'https://snap1.d.tube/ipfs/'+video.json.files[key].img["118"]
@@ -154,6 +156,10 @@ function handleChainData(author, permlink, video, cb) {
                 snapHeight = 360
             }
         }
+    }
+    if (!snap && video.json.files && video.json.files.youtube) {
+        snap = 'http://i.ytimg.com/vi/'+video.json.files.youtube+'/hqdefault.jpg'
+        snapHeight = 360
     }
     var duration = video.json.duration || null
     if (video.json.dur) duration = video.json.dur
@@ -167,19 +173,23 @@ function handleChainData(author, permlink, video, cb) {
 }
 
 function getVideo(author, permlink, cb) {
-    var hasReplied = false
     javalon.getContent(author, permlink, function(err, video) {
-        if (hasReplied) return
         if (err) {
             lightrpc.send('get_state', [`/dtube/@${author}/${permlink}`], function(err, result) {
-                if (hasReplied) return
-                if (err) {
-                    if (avalonDone && cb)
-                        cb(err)
-                    return
-                }
-                if (!result.content[author+'/'+permlink]) {
-                    cb('Not found')
+                if (err || !result.content[author+'/'+permlink]) {
+                    lightrpchive.send('get_state', [`/dtube/@${author}/${permlink}`], function(err, result) {
+                        if (err) {
+                            cb('Internal Error')
+                            return
+                        }
+                        if (!result.content[author+'/'+permlink]) {
+                            cb('Not found')
+                            return
+                        }
+                        var video = parseVideo(result.content[author+'/'+permlink])
+                        handleChainData(author, permlink, video, cb)
+                        hasReplied = true
+                    })
                     return
                 }
                 var video = parseVideo(result.content[author+'/'+permlink])
