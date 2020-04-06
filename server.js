@@ -23,6 +23,8 @@ app.get('*', function(req, res, next) {
 
     if (reqPath.startsWith('/oembed')) {
         console.log(req.headers['user-agent'], req.query)
+        if (req.query.url && req.query.url.indexOf('/?_escaped_fragment_=') > -1)
+            req.query.url = req.query.url.replace('/?_escaped_fragment_=', '')
         if (req.query.url && isValidDTubeUrl(req.query.url) ) {
             getVideo(
             req.query.url.split('/')[4],
