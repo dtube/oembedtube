@@ -29,7 +29,9 @@ app.get('*', function(req, res, next) {
             req.query.url.split('/')[5],
             function(err, html, pageTitle, description, url, snap, duration, snapHeight) {
                 if (err) {
-                    if (err.message.toString().startsWith('Request has timed out.'))
+                    if (err == 'Internal Error')
+                        res.sendStatus(503)
+                    else if (err.message.toString().startsWith('Request has timed out.'))
                         res.sendStatus(503)
                     else
                         res.sendStatus(404)
@@ -143,6 +145,8 @@ function handleChainData(author, permlink, video, cb) {
     var url = rootDomain+'/#!/v/'+author+'/'+permlink
     var snap = null
     var snapHeight = 118
+    if (video.info && video.info.snaphash)
+        snap = 'https://snap1.d.tube/ipfs/'+video.info.snaphash
     if (video.json.ipfs && video.json.ipfs.snaphash)
         snap = 'https://snap1.d.tube/ipfs/'+video.json.ipfs.snaphash
     if (video.json.thumbnailUrl)
@@ -165,7 +169,8 @@ function handleChainData(author, permlink, video, cb) {
     if (video.json.dur) duration = video.json.dur
     var description = video.json.desc
     if (!description && video.json.description) description = video.json.description
-    description = description.replace(/(?:\r\n|\r|\n)/g, ' ').substr(0, 300)
+    if (description) description = description.replace(/(?:\r\n|\r|\n)/g, ' ').substr(0, 300)
+    if (!description) description = ''
     if (cb) {
         cb(null, html, video.json.title, description, url, snap, duration, snapHeight)
         cb = null
