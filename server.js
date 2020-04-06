@@ -24,7 +24,8 @@ app.get('*', function(req, res, next) {
             getVideo(
             req.query.url.split('/')[4],
             req.query.url.split('/')[5],
-            function(err, html, pageTitle, description, url, snap, duration) {
+            function(err, html, pageTitle, description, url, snap, duration, snapHeight) {
+                console.log(err, html)
                 if (err) {
                     if (err.message.toString().startsWith('Request has timed out.'))
                         res.sendStatus(503)
@@ -79,6 +80,10 @@ app.get('*', function(req, res, next) {
                     thumbnail_url: snap,
                     thumbnail_width: 210,
                     thumbnail_height: 118
+                }
+                if (snapHeight == 360) {
+                    response.thumbnail_height = 360
+                    response.thumbnail_width = 640
                 }
                 if (req.query.format == 'xml') {
                     res.set('Content-Type', 'text/xml');
@@ -135,51 +140,58 @@ function handleChainData(author, permlink, video, cb) {
     var html = '<iframe width="480" height="270" src="https://emb.d.tube/#!/'+author+'/'+permlink+'" frameborder="0" allowfullscreen></iframe>'
     var url = rootDomain+'/#!/v/'+author+'/'+permlink
     var snap = null
+    var snapHeight = 118
     if (video.json.ipfs && video.json.ipfs.snaphash)
         snap = 'https://snap1.d.tube/ipfs/'+video.json.ipfs.snaphash
     if (video.json.thumbnailUrl)
         snap = video.json.thumbnailUrl
+    if (video.json.files) {
+        for (const key in video.json.files) {
+            if (video.json.files[key].img && video.json.files[key].img["118"])
+                snap = 'https://snap1.d.tube/ipfs/'+video.json.files[key].img["118"]
+            if (video.json.files[key].img && video.json.files[key].img["360"]) {
+                snap = 'https://snap1.d.tube/ipfs/'+video.json.files[key].img["360"]
+                snapHeight = 360
+            }
+        }
+    }
     var duration = video.json.duration || null
-    var description = video.json.description.replace(/(?:\r\n|\r|\n)/g, ' ').substr(0, 300)
+    if (video.json.dur) duration = video.json.dur
+    var description = video.json.desc
+    if (!description && video.json.description) description = video.json.description
+    description = description.replace(/(?:\r\n|\r|\n)/g, ' ').substr(0, 300)
     if (cb) {
-        cb(null, html, video.json.title, description, url, snap, duration)
+        cb(null, html, video.json.title, description, url, snap, duration, snapHeight)
         cb = null
     }
 }
 
 function getVideo(author, permlink, cb) {
     var hasReplied = false
-    var steemDone = false
-    var avalonDone = false
     javalon.getContent(author, permlink, function(err, video) {
         if (hasReplied) return
-        avalonDone = true
         if (err) {
-            if (steemDone && cb)
-                cb(err)
+            lightrpc.send('get_state', [`/dtube/@${author}/${permlink}`], function(err, result) {
+                if (hasReplied) return
+                if (err) {
+                    if (avalonDone && cb)
+                        cb(err)
+                    return
+                }
+                if (!result.content[author+'/'+permlink]) {
+                    cb('Not found')
+                    return
+                }
+                var video = parseVideo(result.content[author+'/'+permlink])
+                handleChainData(author, permlink, video, cb)
+                hasReplied = true
+            })
             return
         }
         handleChainData(author, permlink, video, cb)
         hasReplied = true
     })
-    lightrpc.send('get_state', [`/dtube/@${author}/${permlink}`], function(err, result) {
-        if (hasReplied) return
-        steemDone = true
-        if (err) {
-            if (avalonDone && cb)
-                cb(err)
-            return
-        }
-        //console.log(result.content[author+'/'+permlink])
-        if (!result.content[author+'/'+permlink]) {
-            if (avalonDone && cb)
-                cb('Not found')
-            return
-        }
-        var video = parseVideo(result.content[author+'/'+permlink])
-        handleChainData(author, permlink, video, cb)
-        hasReplied = true
-    })
+
 }
 
 function parseVideo(video, isComment) {
