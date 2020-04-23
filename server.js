@@ -164,7 +164,7 @@ function handleChainData(author, permlink, video, cb) {
         }
     }
     if (!snap && video.json.files && video.json.files.youtube) {
-        snap = 'http://i.ytimg.com/vi/'+video.json.files.youtube+'/hqdefault.jpg'
+        snap = 'https://i.ytimg.com/vi/'+video.json.files.youtube+'/hqdefault.jpg'
         snapHeight = 360
     }
     var duration = video.json.duration || null
